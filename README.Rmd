@@ -1,0 +1,107 @@
+---
+title: "Motor Trend Cars Regression Model"
+author: "Maurício Collaça"
+date: "Nov 22, 2017"
+geometry: margin=1cm
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
+library(dplyr); library(ggplot2); library(datasets); data(mtcars)
+```
+
+## Executive Summary
+
+Motor Trend magazine is about the automobile industry and they are interested in answer the following two questions:
+
+* “Is an automatic or manual transmission better for MPG”
+* "Quantify the MPG difference between automatic and manual transmissions"
+
+The data was extracted from the 1974 Motor Trend US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models).
+
+The following sections details the process and conclusion that the manual transmission is better for gas milleage and quantify the difference.
+
+## Exploratory Data Analysis
+
+mtcars is a data frame with 32 observations on 11 variables.
+
+[, 1]	 mpg    Miles/(US) gallon  
+[, 2]	 cyl	Number of cylinders  
+[, 3]	 disp	Displacement (cu.in.)  
+[, 4]	 hp     Gross horsepower  
+[, 5]	 drat   Rear axle ratio  
+[, 6]	 wt	    Weight (1000 lbs)  
+[, 7]	 qsec   1/4 mile time  
+[, 8]	 vs     V/S  
+[, 9]	 am     Transmission (0 = automatic, 1 = manual)  
+[,10]	 gear   Number of forward gears  
+[,11]	 carb   Number of carburetors
+
+The following boxplot suggests that manual transmission is better for miles per gallon.
+```{r boxplot, echo=FALSE, fig.height=2, fig.width=3, fig.align='center'}
+ggplot(mtcars, aes(x=factor(am, labels = c("auto","manual")), y=mpg)) +
+    geom_boxplot() + theme_minimal() + xlab("transmission")
+```
+One can also see that the higher average also implies in much higher variance.
+
+## Regression Model
+
+The strategy for model selection is to perform an analysis of variance (ANOVA) of nested models starting from the base model `mpg ~ am` then adding regressors in the descending order of their correlation with `mpg`.
+
+```{r covariates, echo=FALSE, comment=""}
+corMatrix <- cor(mtcars)
+round(corMatrix[-1,1][order(abs(corMatrix[-1,1]),decreasing = TRUE)], 2)
+```
+The following model ANOVA suggests the first three models are adequate because they return p-values less than 0.05.
+```{r modelanova, echo=FALSE, comment=""}
+mtcars$cyl <- factor(mtcars$cyl)
+mtcars$vs <- factor(mtcars$vs)
+mtcars$am <- factor(mtcars$am, labels = c("automatic", "manual"))
+mtcars$gear <- factor(mtcars$gear)
+mtcars$carb <- factor(mtcars$carb)
+fit1 <- lm(mpg ~ am, mtcars)
+fit2 <- lm(mpg ~ am + wt, mtcars)
+fit3 <- lm(mpg ~ am + wt + cyl, mtcars)
+fit4 <- lm(mpg ~ am + wt + cyl + disp, mtcars)
+fit5 <- lm(mpg ~ am + wt + cyl + disp + hp, mtcars)
+fit6 <- lm(mpg ~ am + wt + cyl + disp + hp + drat, mtcars)
+fit7 <- lm(mpg ~ am + wt + cyl + disp + hp + drat + vs, mtcars)
+fit8 <- lm(mpg ~ am + wt + cyl + disp + hp + drat + vs + carb, mtcars)
+fit9 <- lm(mpg ~ am + wt + cyl + disp + hp + drat + vs + carb + gear, mtcars)
+fit10 <- lm(mpg ~ am + wt + cyl + disp + hp + drat + vs + carb + gear + qsec, mtcars)
+anova(fit1,fit2,fit3,fit4,fit5,fit6,fit7,fit8,fit9,fit10)
+```
+Inspecting coefficients of the first 3 models, one can see the slope sign inversion.  Also, the first model produces more significant, i.e. lower p-values for $\beta_0$ and $\beta_1$ coefficients, suggesting the additional regressors aren't good.
+```{r modelfit, echo=FALSE, comment=""}
+summary(fit1)$coef
+summary(fit2)$coef
+summary(fit3)$coef
+```
+
+Examining the residual plots in the Appendix, one can confirm that the best model that explains the relatioship between the miles per galon and transmission is the model 1 because of is horizontal line in the Residuals vs Fitted plot and the diagonal fit in the Normal Q-Q plot.
+
+The confidence intervals for the intercept and slope of the model 1 are:
+```{r confint, echo=FALSE, comment=""}
+confint(fit1)
+```
+
+## Conclusions
+
+Interpreting the model 1 coefficients one can see that the manual transmission is better for the gas milleage by increasing `r round(coef(fit1)[2],2)` miles per gallon:
+
+* The intercept coefficient tells that the average miles per galon for automatic transmission is `r round(coef(fit1)[1],2)`, with a high significance of its p-value $`r summary(fit1)$coef[1,4]`$ being less than the $\alpha$ level of 0.05.
+* The slope coefficient `ammanual` tells that the increase in the average miles per galon for manual transmission is `r round(coef(fit1)[2],2)` with a high significance of its pvalue $`r summary(fit1)$coef[2,4]`$ being less than the $\alpha$ level of 0.05.
+
+\pagebreak
+
+## Appendix
+
+### Residual plots for models 1, 2 and 3
+```{r residualplots, echo=FALSE, fig.height=9, fig.width=9}
+par(mfrow=c(3,4))
+plot(fit1, which=c(1,2,3,5)); plot(fit2, which=c(1,2,3,5)); plot(fit3, which=c(1,2,3,5))
+```
