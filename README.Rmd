@@ -2,7 +2,7 @@
 title: "Motor Trend Cars Regression Model"
 author: "Maurício Collaça"
 date: "Nov 22, 2017"
-geometry: margin=1cm
+geometry: margin=1.1cm
 output: pdf_document
 ---
 
@@ -16,92 +16,68 @@ library(dplyr); library(ggplot2); library(datasets); data(mtcars)
 
 ## Executive Summary
 
-Motor Trend magazine is about the automobile industry and they are interested in answer the following two questions:
+Motor Trend magazine is about the automobile industry and they are interested whether an automatic or manual transmission is better for MPG and quantify the MPG difference between automatic and manual transmissions.  The data was extracted from the 1974 Motor Trend US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models).
 
-* “Is an automatic or manual transmission better for MPG”
-* "Quantify the MPG difference between automatic and manual transmissions"
-
-The data was extracted from the 1974 Motor Trend US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models).
-
-The following sections details the process and conclusion that the manual transmission is better for gas milleage and quantify the difference.
+It's concluded that manual transmission is better for gas mileage at a difference of 7.24 miles per galon.
 
 ## Exploratory Data Analysis
 
-mtcars is a data frame with 32 observations on 11 variables.
-
-[, 1]	 mpg    Miles/(US) gallon  
-[, 2]	 cyl	Number of cylinders  
-[, 3]	 disp	Displacement (cu.in.)  
-[, 4]	 hp     Gross horsepower  
-[, 5]	 drat   Rear axle ratio  
-[, 6]	 wt	    Weight (1000 lbs)  
-[, 7]	 qsec   1/4 mile time  
-[, 8]	 vs     V/S  
-[, 9]	 am     Transmission (0 = automatic, 1 = manual)  
-[,10]	 gear   Number of forward gears  
-[,11]	 carb   Number of carburetors
-
-The following boxplot suggests that manual transmission is better for miles per gallon.
-```{r boxplot, echo=FALSE, fig.height=2, fig.width=3, fig.align='center'}
+The following boxplot suggests that manual transmission is better for miles per gallon and implies in a much higher variance.
+```{r boxplot, fig.height=2, fig.width=3, fig.align='center'}
 ggplot(mtcars, aes(x=factor(am, labels = c("auto","manual")), y=mpg)) +
     geom_boxplot() + theme_minimal() + xlab("transmission")
 ```
-One can also see that the higher average also implies in much higher variance.
 
-## Regression Model
+## Regression model selection
+ 
+The strategy is to perform nested likelihood ratio tests starting from a base model `mpg ~ am` and adding regressors in the descending order of their correlation with `am`.
 
-The strategy for model selection is to perform an analysis of variance (ANOVA) of nested models starting from the base model `mpg ~ am` then adding regressors in the descending order of their correlation with `mpg`.
-
-```{r covariates, echo=FALSE, comment=""}
+```{r covariates, comment=""}
 corMatrix <- cor(mtcars)
-round(corMatrix[-1,1][order(abs(corMatrix[-1,1]),decreasing = TRUE)], 2)
+round(corMatrix[9,-c(1,9)][order(abs(corMatrix[9,-c(1,9)]),decreasing = TRUE)], 2)
 ```
-The following model ANOVA suggests the first three models are adequate because they return p-values less than 0.05.
-```{r modelanova, echo=FALSE, comment=""}
-mtcars$cyl <- factor(mtcars$cyl)
-mtcars$vs <- factor(mtcars$vs)
+The following model ANOVA suggests the first 4 models are adequate as they return p-values less than 0.05.
+```{r modelanova, comment=""}
+mtcars$cyl <- factor(mtcars$cyl); mtcars$vs <- factor(mtcars$vs)
 mtcars$am <- factor(mtcars$am, labels = c("automatic", "manual"))
-mtcars$gear <- factor(mtcars$gear)
-mtcars$carb <- factor(mtcars$carb)
+mtcars$gear <- factor(mtcars$gear); mtcars$carb <- factor(mtcars$carb)
 fit1 <- lm(mpg ~ am, mtcars)
-fit2 <- lm(mpg ~ am + wt, mtcars)
-fit3 <- lm(mpg ~ am + wt + cyl, mtcars)
-fit4 <- lm(mpg ~ am + wt + cyl + disp, mtcars)
-fit5 <- lm(mpg ~ am + wt + cyl + disp + hp, mtcars)
-fit6 <- lm(mpg ~ am + wt + cyl + disp + hp + drat, mtcars)
-fit7 <- lm(mpg ~ am + wt + cyl + disp + hp + drat + vs, mtcars)
-fit8 <- lm(mpg ~ am + wt + cyl + disp + hp + drat + vs + carb, mtcars)
-fit9 <- lm(mpg ~ am + wt + cyl + disp + hp + drat + vs + carb + gear, mtcars)
-fit10 <- lm(mpg ~ am + wt + cyl + disp + hp + drat + vs + carb + gear + qsec, mtcars)
-anova(fit1,fit2,fit3,fit4,fit5,fit6,fit7,fit8,fit9,fit10)
+fit2 <- lm(mpg ~ am + gear, mtcars)
+fit3 <- lm(mpg ~ am + gear + drat, mtcars)
+fit4 <- lm(mpg ~ am + gear + drat + wt, mtcars)
+fit5 <- lm(mpg ~ am + gear + drat + wt + disp, mtcars)
+fit6 <- lm(mpg ~ am + gear + drat + wt + disp + cyl, mtcars)
+fit7 <- lm(mpg ~ am + gear + drat + wt + disp + cyl + hp, mtcars)
+fit8 <- lm(mpg ~ am + gear + drat + wt + disp + cyl + hp + qsec, mtcars)
+fit9 <- lm(mpg ~ am + gear + drat + wt + disp + cyl + hp + qsec + vs, mtcars)
+fit10 <- lm(mpg ~ am + gear + drat + wt + disp + cyl + hp + qsec + vs + carb, mtcars)
+as.data.frame(anova(fit1,fit2,fit3,fit4,fit5,fit6,fit7,fit8,fit9,fit10))
 ```
-Inspecting coefficients of the first 3 models, one can see the slope sign inversion.  Also, the first model produces more significant, i.e. lower p-values for $\beta_0$ and $\beta_1$ coefficients, suggesting the additional regressors aren't good.
-```{r modelfit, echo=FALSE, comment=""}
-summary(fit1)$coef
-summary(fit2)$coef
-summary(fit3)$coef
+Inspecting coefficients of the first 4 models, one can see the first model results in the highest significant slope coefficient, as their p-values are the lowest ones and bellow 0.05, so the other models with additional regressors don't help to explain the data.
+```{r modelfit, comment=""}
+summary(fit1)$coef; summary(fit2)$coef; summary(fit3)$coef; summary(fit4)$coef
 ```
 
-Examining the residual plots in the Appendix, one can confirm that the best model that explains the relatioship between the miles per galon and transmission is the model 1 because of is horizontal line in the Residuals vs Fitted plot and the diagonal fit in the Normal Q-Q plot.
+The residual plots in Appendix show the best model that explains the relatioship between the `mpg` and `am` is first because of is horizontal line in the Residuals vs Fitted plot and the diagonal fit in the Normal Q-Q plot.
 
 The confidence intervals for the intercept and slope of the model 1 are:
-```{r confint, echo=FALSE, comment=""}
+```{r confint, comment=""}
 confint(fit1)
 ```
 
 ## Conclusions
 
-Interpreting the model 1 coefficients one can see that the manual transmission is better for the gas milleage by increasing `r round(coef(fit1)[2],2)` miles per gallon:
-
-* The intercept coefficient tells that the average miles per galon for automatic transmission is `r round(coef(fit1)[1],2)`, with a high significance of its p-value $`r summary(fit1)$coef[1,4]`$ being less than the $\alpha$ level of 0.05.
-* The slope coefficient `ammanual` tells that the increase in the average miles per galon for manual transmission is `r round(coef(fit1)[2],2)` with a high significance of its pvalue $`r summary(fit1)$coef[2,4]`$ being less than the $\alpha$ level of 0.05.
+Interpreting the model 1 coefficients one can see that the manual transmission is better for the gas milleage by increasing `r round(coef(fit1)[2],2)` miles per gallon.  The intercept coefficient tells that the average miles per galon for automatic transmission is `r round(coef(fit1)[1],2)` with high significance as its p-value $`r summary(fit1)$coef[1,4]`$ is less than 0.05.  The slope coefficient `ammanual` tells that the increase in the average miles per galon for manual transmission is `r round(coef(fit1)[2],2)` with high significance as its p-value $`r summary(fit1)$coef[2,4]`$ is less than 0.05.
 
 \pagebreak
 
 ## Appendix
 
-### Residual plots for models 1, 2 and 3
-```{r residualplots, echo=FALSE, fig.height=9, fig.width=9}
-par(mfrow=c(3,4))
-plot(fit1, which=c(1,2,3,5)); plot(fit2, which=c(1,2,3,5)); plot(fit3, which=c(1,2,3,5))
+### Residual plots for models 1, 2, 3 and 4
+```{r residualplots, fig.height=9, fig.width=9}
+par(mfrow=c(4,4))
+plot(fit1, which=c(1,2,3,5))
+plot(fit2, which=c(1,2,3,5))
+plot(fit3, which=c(1,2,3,5))
+plot(fit4, which=c(1,2,3,5))
 ```
