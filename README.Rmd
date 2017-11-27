@@ -2,7 +2,7 @@
 title: "Motor Trend Cars Regression Model"
 author: "Maurício Collaça"
 date: "Nov 22, 2017"
-geometry: margin=1.1cm
+geometry: margin=1cm
 output: pdf_document
 ---
 
@@ -11,73 +11,135 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
-library(dplyr); library(ggplot2); library(datasets); data(mtcars)
+library(dplyr); library(ggplot2); library(GGally); library(gridExtra); library(car); library(datasets); data(mtcars)
 ```
 
-## Executive Summary
+### Executive Summary
 
-Motor Trend magazine is about the automobile industry and they are interested whether an automatic or manual transmission is better for MPG and quantify the MPG difference between automatic and manual transmissions.  The data was extracted from the 1974 Motor Trend US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance for 32 automobiles (1973–74 models).
+The Motor Trend magazine are interested whether an automatic or manual transmission is better for MPG and quantifying difference.  The data was extracted from the 1974 Motor Trend US magazine, and comprises fuel consumption and 10 aspects of automobile design and performance.
 
-It's concluded that manual transmission is better for gas mileage at a difference of 7.24 miles per galon.
+The following sections explain that average mpg for automatic transmission, average weight and average 1/4 mile time is 18.9 with a 95% confidence interval.  Manual cars increases mpg because the manual transmission, holding fixed the weight and the 1/4 mile time, increases mpg by 2.94 miles with a 95% confidence interval.  
 
-## Exploratory Data Analysis
+### Exploratory Data Analysis
 
-The following boxplot suggests that manual transmission is better for miles per gallon and implies in a much higher variance.
-```{r boxplot, fig.height=2, fig.width=3, fig.align='center'}
-ggplot(mtcars, aes(x=factor(am, labels = c("auto","manual")), y=mpg)) +
-    geom_boxplot() + theme_minimal() + xlab("transmission")
+The dataset contains 32 observations on 11 variables and row names for each car.  A small preview:
+```{r echo=FALSE, comment=""}
+head(mtcars,3) %>% knitr::kable()
 ```
 
-## Regression model selection
- 
-The strategy is to perform nested likelihood ratio tests starting from a base model `mpg ~ am` and adding regressors in the descending order of their correlation with `am`.
+**Legend**: `mpg` Miles/gallon; `cyl` Number of cylinders; `disp` Displacement (cu.in.); `hp` horsepower; `drat` Rear axle ratio; `wt` Weight (1000 lbs); `qsec` 1/4 mile time; `vs` V/S; `am` Transmission (0=auto, 1=manual); `gear` Number of forward gears and `carb` Number of carburetors.
 
-```{r covariates, comment=""}
-corMatrix <- cor(mtcars)
-round(corMatrix[9,-c(1,9)][order(abs(corMatrix[9,-c(1,9)]),decreasing = TRUE)], 2)
+Figure 1 shows many variables are correlated with the `mpg` and `am`, characterizing a multicollinearity issue. Figure 2 suggests that manual transmission is better for `mpg` with a higher variance and that automatic cars are heavier than manual cars. The variables `wt`, `cyl`, `disp` and `hp` are the highest correlated to `mpg`.  Figure 3 show these variables are somewhat measuring the same thing.  It makes sense weight could be the main regressor of `mpg` as Newton's $2^{nd}$ law of motion tell us force is the product of mass and acceleration: $F = m a$.  The variable directly related to acceleration is `qsec`.  Its unit in seconds suggests the more seconds the less acceleration and somewhat less fuel consumption.  It makes sense `qsec` is positively correlated to `mpg` and negatively correlated to `wt` but differently for each transmission condition as shown in figure 4.
+
+### Regression models
+
+```{r include=FALSE}
+mtcars <- mtcars %>%  mutate(vs = factor(vs, labels = c("S","V")),
+                             am = factor(am, labels = c("auto","manual")))
 ```
-The following model ANOVA suggests the first 4 models are adequate as they return p-values less than 0.05.
-```{r modelanova, comment=""}
-mtcars$cyl <- factor(mtcars$cyl); mtcars$vs <- factor(mtcars$vs)
-mtcars$am <- factor(mtcars$am, labels = c("automatic", "manual"))
-mtcars$gear <- factor(mtcars$gear); mtcars$carb <- factor(mtcars$carb)
-fit1 <- lm(mpg ~ am, mtcars)
-fit2 <- lm(mpg ~ am + gear, mtcars)
-fit3 <- lm(mpg ~ am + gear + drat, mtcars)
-fit4 <- lm(mpg ~ am + gear + drat + wt, mtcars)
-fit5 <- lm(mpg ~ am + gear + drat + wt + disp, mtcars)
-fit6 <- lm(mpg ~ am + gear + drat + wt + disp + cyl, mtcars)
-fit7 <- lm(mpg ~ am + gear + drat + wt + disp + cyl + hp, mtcars)
-fit8 <- lm(mpg ~ am + gear + drat + wt + disp + cyl + hp + qsec, mtcars)
-fit9 <- lm(mpg ~ am + gear + drat + wt + disp + cyl + hp + qsec + vs, mtcars)
-fit10 <- lm(mpg ~ am + gear + drat + wt + disp + cyl + hp + qsec + vs + carb, mtcars)
-as.data.frame(anova(fit1,fit2,fit3,fit4,fit5,fit6,fit7,fit8,fit9,fit10))
+The strategy is perform a nested likelihood test of models by first adding the regressor of interest `am` and progressively the more relevant regressors according to the previous EDA which is also supported by the AIC stepwise model selection algorithm:
+```{r, comment=""}
+step(lm(mpg ~ ., mtcars), direction="both", trace=0)$call
 ```
-Inspecting coefficients of the first 4 models, one can see the first model results in the highest significant slope coefficient, as their p-values are the lowest ones and bellow 0.05, so the other models with additional regressors don't help to explain the data.
-```{r modelfit, comment=""}
-summary(fit1)$coef; summary(fit2)$coef; summary(fit3)$coef; summary(fit4)$coef
+`wt` and `qsec` are centered for meaningful intercept. The tests show model improvements:
+```{r, comment=""}
+fit1 <- lm(mpg ~ am, data = mtcars)
+fit2 <- update(fit1, mpg ~ am + I(wt-mean(wt)))
+fit3 <- update(fit1, mpg ~ am + I(wt-mean(wt)) + I(qsec-mean(qsec)))
+data.frame(anova(fit1, fit2, fit3), check.names = FALSE)
+```
+The first and third models result significant transmission slope coefficients.
+```{r echo=FALSE, comment=""}
+summary(fit1)$coef; summary(fit2)$coef; summary(fit3)$coef
+```
+Assuming the third model as the best one, the following plot aims to show the relationship between selected terms.
+```{r echo=FALSE, fig.height=2.5, fig.width=5, fig.align="center"}
+ggplot(mtcars, aes(y=mpg, x=wt, col=am, size=qsec)) + theme_minimal() +
+    geom_point(alpha=.3) +
+    geom_smooth(size=.5, method=lm, alpha=.1, se = FALSE) +
+    geom_smooth(col = "darkgray", linetype=2, size=1, method=lm, alpha=.1)
 ```
 
-The residual plots in Appendix show the best model that explains the relatioship between the `mpg` and `am` is first because of is horizontal line in the Residuals vs Fitted plot and the diagonal fit in the Normal Q-Q plot.
-
-The confidence intervals for the intercept and slope of the model 1 are:
+The variance-inflation factors aren't too high:
+```{r, comment=""}
+vif(fit3)
+```
+The confidence interval considering average `wt` and `qsec`:
 ```{r confint, comment=""}
-confint(fit1)
+confint(fit3)
+```
+There are some potentially influential observations:
+```
+summary(influence.measures(fit3))
+```
+```{r include=FALSE}
+measures <- summary(influence.measures(fit3))
+```
+```{r echo=FALSE, comment=""}
+data.frame(measures, check.names = FALSE) %>% knitr::kable(digits = 2)
 ```
 
-## Conclusions
+The figure 5 show residual plots with some violation of the residuals normality.
 
-Interpreting the model 1 coefficients one can see that the manual transmission is better for the gas milleage by increasing `r round(coef(fit1)[2],2)` miles per gallon.  The intercept coefficient tells that the average miles per galon for automatic transmission is `r round(coef(fit1)[1],2)` with high significance as its p-value $`r summary(fit1)$coef[1,4]`$ is less than 0.05.  The slope coefficient `ammanual` tells that the increase in the average miles per galon for manual transmission is `r round(coef(fit1)[2],2)` with high significance as its p-value $`r summary(fit1)$coef[2,4]`$ is less than 0.05.
+### Conclusions
+
+For the selected regression model, the average `mpg` for automatic transmission, average `wt` and average `qsec` is `r round(coef(fit3)[1],2)` with a 95% confidence interval from `r round(confint(fit3)[1,1],2)` to `r round(confint(fit3)[1,2],2)`.  The manual transmission, holding fixed `wt` and `qsec`, increases `mpg` by `r round(coef(fit3)[2],2)` with a 95% confidence interval from `r round(confint(fit3)[2,1],2)` to `r round(confint(fit3)[2,2],2)`.
 
 \pagebreak
 
-## Appendix
+### Appendix
 
-### Residual plots for models 1, 2, 3 and 4
-```{r residualplots, fig.height=9, fig.width=9}
-par(mfrow=c(4,4))
-plot(fit1, which=c(1,2,3,5))
-plot(fit2, which=c(1,2,3,5))
-plot(fit3, which=c(1,2,3,5))
-plot(fit4, which=c(1,2,3,5))
+#### Figure 1: Generalized pairs plots
+```{r echo=FALSE, fig.height=8, fig.width=8, message=FALSE, warning=FALSE, cache=TRUE, fig.align="center"}
+ggpairs(mtcars)
+```
+
+\pagebreak
+
+#### Figure 2: Miles per galon and Weight by transmission
+```{r echo=FALSE, fig.align='center', fig.height=2, fig.width=4}
+grid.arrange(
+    nrow=1, 
+    ggplot(mtcars, aes(x=am, y=mpg)) +
+        geom_boxplot() + theme_minimal(),
+    ggplot(mtcars, aes(x=am, y=wt)) +
+        geom_boxplot() + theme_minimal() + ylab("weight"))
+```
+
+#### Figure 3: Miles per weight, number of cylinders and displacement volume.
+```{r echo=FALSE, fig.height=2, fig.width=9, fig.align='center'}
+grid.arrange(
+    nrow=1,
+    ggplot(mtcars, aes(y=mpg, x=wt, col=am)) + theme_minimal() + theme(legend.position = "bottom") +
+        geom_point() + geom_smooth(size=.5, method=lm, se = FALSE) + xlab("Weight (1000 lbs)") +
+        geom_smooth(col = "darkgray", linetype=2, size=1, method=lm, alpha=.1),
+    ggplot(mtcars, aes(y=mpg, x=cyl, col=am)) + theme_minimal() +  theme(legend.position = "bottom") +
+        geom_point() + geom_smooth(size=.5, method=lm, se = FALSE) + xlab("Number of cylinders") +
+        geom_smooth(col = "darkgray", linetype=2, size=1, method=lm, alpha=.1),
+    ggplot(mtcars, aes(y=mpg, x=disp, col=am)) + theme_minimal() +  theme(legend.position = "bottom") +
+        geom_point() + geom_smooth(size=.5, method=lm, se = FALSE) + xlab("Displacement (cu.in.)") +
+        geom_smooth(col = "darkgray", linetype=2, size=1, method=lm, alpha=.1),
+    ggplot(mtcars, aes(y=mpg, x=hp, col=am)) + theme_minimal() +  theme(legend.position = "bottom") +
+        geom_point() + geom_smooth(size=.5, method=lm, se = FALSE) + xlab("Horsepower (hp)") +
+        geom_smooth(col = "darkgray", linetype=2, size=1, method=lm, alpha=.1))
+```
+
+#### Figure 4: Miles per gallon by 1/4 Mile Time.
+```{r echo=FALSE, fig.align='center', fig.height=2, fig.width=4}
+grid.arrange(nrow=1,
+    ggplot(mtcars, aes(x=qsec, y=mpg, col=am))  + theme_minimal() + theme(legend.position = "bottom") +
+        geom_point() + 
+        geom_smooth(method=lm, se = FALSE, size=.5) +
+        geom_smooth(col="darkgrey", method=lm, alpha=.1, linetype=2, size=1) + 
+        xlab("1/4 mile time (secs)"),
+    ggplot(mtcars, aes(x=qsec, y=wt, col=am))  + theme_minimal() + theme(legend.position = "bottom") +
+        geom_point() +
+        geom_smooth(method=lm, se = FALSE, size=.5) +
+        geom_smooth(col="darkgrey", method=lm, alpha=.1, linetype=2, size=1) + 
+        xlab("1/4 mile time (secs)") + ylab("Weight"))
+```
+
+#### Figure 5: Residual plots
+```{r echo=FALSE, fig.height=2, fig.width=8, fig.align='center'}
+par(mfrow=c(1,4)); plot(fit3, which=c(1,2,3,5))
 ```
