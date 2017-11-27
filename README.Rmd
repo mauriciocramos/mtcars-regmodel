@@ -124,7 +124,7 @@ grid.arrange(
         geom_smooth(col = "darkgray", linetype=2, size=1, method=lm, alpha=.1))
 ```
 
-#### Figure 4: Miles per gallon by 1/4 Mile Time.
+#### Figure 4: Miles per gallon and Weight by 1/4 Mile Time.
 ```{r echo=FALSE, fig.align='center', fig.height=2, fig.width=4}
 grid.arrange(nrow=1,
     ggplot(mtcars, aes(x=qsec, y=mpg, col=am))  + theme_minimal() + theme(legend.position = "bottom") +
